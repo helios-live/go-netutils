@@ -5,8 +5,8 @@ import (
 	"io"
 	"time"
 
-	"github.com/alex-eftimie/utils"
 	"github.com/fatih/color"
+	"github.com/ideatocode/go-utils"
 )
 
 type contextKey string

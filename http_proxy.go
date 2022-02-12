@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/alex-eftimie/utils"
+	"github.com/ideatocode/go-utils"
 )
 
 // ApiCreateServer is the response given by HTTP-Proxy on api servercreation
