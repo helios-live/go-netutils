@@ -3,30 +3,41 @@ package netutils
 import (
 	"context"
 	"io"
+
 	"time"
 
-	"github.com/fatih/color"
-	"github.com/ideatocode/go-utils"
+	"go.ideatocode.tech/log"
 )
 
-type contextKey string
+// Piper .
+type Piper struct {
+	Logger  log.Logger
+	Timeout time.Duration
+	debug   bool
+}
 
-var (
-	// ContextKeyPipeTimeout holds timeout for piping needs
-	ContextKeyPipeTimeout = contextKey("pipeTimeout")
-)
+// New returns a pointer to a new Piper instance
+func New(l log.Logger, t time.Duration) *Piper {
+	return &Piper{
+		Logger:  l,
+		Timeout: t,
+	}
+}
 
-// RunPiper pipes data between upstream and downstream and closes one when the other closes
-func RunPiper(ctx context.Context, downstream io.ReadWriteCloser, upstream io.ReadWriteCloser) {
+// Debug turns debugging on and off
+func (p Piper) Debug(debug bool) {
+	p.debug = debug
+}
+
+// Run pipes data between upstream and downstream and closes one when the other closes
+// times out after two hours by default
+func (p Piper) Run(ctx context.Context, downstream io.ReadWriteCloser, upstream io.ReadWriteCloser) {
 	var dur time.Duration
-	iff := ctx.Value(ContextKeyPipeTimeout)
-	if iff == nil {
+	if p.Timeout == 0 {
 		dur = time.Duration(2 * time.Hour)
 	} else {
-		dur = iff.(time.Duration)
+		dur = p.Timeout
 	}
-	// ctx := context.Background()
-	// dur := time.Duration(10 * time.Second)
 
 	done := false
 	cancel := func() {
@@ -37,24 +48,14 @@ func RunPiper(ctx context.Context, downstream io.ReadWriteCloser, upstream io.Re
 		ctx.Done()
 		downstream.Close()
 		upstream.Close()
-		utils.Debug(999, "Closing sockets")
+		if p.debug {
+			p.Logger.Debug("Closing sockets")
+		}
 	}
-	idleTimeoutPipe(ctx, downstream, upstream, dur, cancel)
-	// go idleTimeoutPipe(ctx, upstream, downstream, dur, cancel)
-	// pipe content
-	// go Transfer(downstream, upstream)
-	// Transfer(upstream, downstream)
+	p.idleTimeoutPipe(ctx, downstream, upstream, dur, cancel)
 }
 
-// Transfer just copies from source to destination then closes both
-func Transfer(destination io.WriteCloser, source io.ReadCloser) {
-	defer destination.Close()
-	defer source.Close()
-	io.Copy(destination, source)
-	utils.Debug(999, "Closing sockets")
-}
-
-func idleTimeoutPipe(ctx context.Context, dst io.ReadWriter, src io.ReadWriter, timeout time.Duration,
+func (p Piper) idleTimeoutPipe(ctx context.Context, dst io.ReadWriter, src io.ReadWriter, timeout time.Duration,
 	cancel context.CancelFunc) (written int64, err error) {
 	read := make(chan int)
 	go func() {
@@ -64,7 +65,9 @@ func idleTimeoutPipe(ctx context.Context, dst io.ReadWriter, src io.ReadWriter, 
 				return
 			case <-time.After(timeout):
 
-				utils.Debug(999, color.RedString("idleTimeoutPipe timeout reached"))
+				if p.debug {
+					p.Logger.Debug("idleTimeoutPipe timeout reached")
+				}
 				cancel()
 				return
 			case <-read:
